@@ -1,56 +1,69 @@
+const express = require("express");
+
+const router = express.Router();
+
 const crypto = require("crypto");
 
-router.post("/login", async (req, res) => {
-  try {
-    const { internshipId, email, dob } = req.body;
+const User = require("../models/User");
 
-    const user = await User.findOne({
-      internshipId,
-      email,
-    });
+const { sendApprovalMailToAdmin } = require("../utils/emailService");
 
-    // ❌ If user not in Excel database
-    if (!user) {
-      return res.status(401).json({
-        message: "You are not authorized. Data not found.",
-      });
-    }
 
-    // ❌ DOB mismatch
-    if (user.dateOfBirth !== dob) {
-      return res.status(401).json({
-        message: "Invalid Date of Birth",
-      });
-    }
+router.post("/register", async (req,res)=>{
 
-    // 🔴 If not approved
-    if (!user.isApproved) {
+  const {name,email,password,internshipId,dateOfBirth}=req.body;
 
-      // Send approval mail only first time
-      if (!user.approvalRequested) {
-        const token = crypto.randomBytes(32).toString("hex");
+  const token = crypto.randomBytes(32).toString("hex");
 
-        user.approvalToken = token;
-        user.approvalRequested = true;
-        await user.save();
+  const newUser = new User({
 
-        await sendApprovalMailToAdmin(user);
-      }
+    name,
+    email,
+    password,
+    internshipId,
+    dateOfBirth,
 
-      return res.status(403).json({
-        message: "Approval request sent to admin. Please wait.",
-      });
-    }
+    approvalToken: token,
 
-    // ✅ If approved
-    res.status(200).json({
-      success: true,
-      message: "Login successful",
-      user,
-    });
+    approvalTokenExpires: Date.now()+86400000
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server Error" });
-  }
+  });
+
+  await newUser.save();
+
+  await sendApprovalMailToAdmin(newUser);
+
+  res.json({
+    message:"Registration successful. Waiting for admin approval."
+  });
+
 });
+
+
+router.get("/admin/approve/:token", async (req,res)=>{
+
+  const user = await User.findOne({
+
+    approvalToken:req.params.token,
+
+    approvalTokenExpires:{ $gt: Date.now() }
+
+  });
+
+  if(!user){
+    return res.send("Invalid or expired link");
+  }
+
+  user.isApproved=true;
+
+  user.approvalToken=undefined;
+
+  user.approvalTokenExpires=undefined;
+
+  await user.save();
+
+  res.send("User Approved Successfully");
+
+});
+
+module.exports = router;
