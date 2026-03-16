@@ -1,20 +1,20 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
-const nodemailer = require("nodemailer");
 const path = require("path");
+const { sendApprovalMailToUser } = require("../utils/emailService");
 
 // ===============================
-// EMAIL TRANSPORTER (Reusable)
+// GET ALL USERS (For Admin Dashboard)
 // ===============================
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.ADMIN_EMAIL,
-    pass: process.env.ADMIN_PASS
+router.get("/users", async (req, res) => {
+  try {
+    const users = await User.find({}, "name email internshipId tasks hours certificateApproved certificateRequested");
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
-
 
 // ===============================
 // ADMIN APPROVAL ROUTE
@@ -36,33 +36,10 @@ router.get("/approve/:id", async (req, res) => {
     await user.save();
 
     // Download link (Frontend URL)
-    const downloadLink = `http://localhost:3000/download/${user._id}`;
+    const downloadLink = `http://localhost:5173/certificate`; // Updated to point to frontend cert page
 
     // Send Email to User
-    await transporter.sendMail({
-      from: process.env.ADMIN_EMAIL,
-      to: user.email,
-      subject: "Certificate Approved - Permission Granted",
-      html: `
-        <h2>Permission Granted ✅</h2>
-        <p>Hello ${user.name},</p>
-        <p>Your internship certificate has been approved.</p>
-
-        <a href="${downloadLink}">
-          <button style="
-            padding:12px 20px;
-            background-color:#007bff;
-            color:white;
-            border:none;
-            border-radius:5px;
-            cursor:pointer;">
-            Download Certificate
-          </button>
-        </a>
-
-        <p>Thank you.</p>
-      `
-    });
+    await sendApprovalMailToUser(user, downloadLink);
 
     res.send("Certificate Approved & Email Sent Successfully");
 
@@ -71,9 +48,8 @@ router.get("/approve/:id", async (req, res) => {
   }
 });
 
-
 // ===============================
-// CERTIFICATE DOWNLOAD ROUTE
+// CERTIFICATE DOWNLOAD ROUTE (Backend PDF)
 // ===============================
 router.get("/download/:id", async (req, res) => {
   try {
@@ -87,7 +63,7 @@ router.get("/download/:id", async (req, res) => {
       return res.status(403).json({ message: "Permission Not Granted" });
     }
 
-    // Path to certificate file
+    // Path to certificate file (Template or dynamicly generated PDF on backend)
     const filePath = path.join(__dirname, "../certificate.pdf");
 
     res.download(filePath, `${user.name}_Certificate.pdf`);

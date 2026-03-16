@@ -18,8 +18,25 @@ const userSchema = new mongoose.Schema({
   },
 
   approvalToken: String,
-
-  approvalTokenExpires: Date
+  approvalTokenExpires: Date,
+  otp: String,
+  otpExpires: Date,
+  tasks: { type: Number, default: 0 },
+  hours: { type: Number, default: 0 },
+  workDetails: [
+    {
+      date: String,
+      task: String,
+      hours: String
+    }
+  ],
+  certificateApproved: { type: Boolean, default: false },
+  certificateRequested: { type: Boolean, default: false },
+  position: { type: String, default: "Intern" },
+  duration: { type: String, default: "One Month" },
+  startDate: String,
+  endDate: String,
+  issueDate: String
 
 });
 

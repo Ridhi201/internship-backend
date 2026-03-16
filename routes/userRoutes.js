@@ -40,7 +40,7 @@ router.post("/register", async (req,res)=>{
 });
 
 
-router.get("/admin/approve/:token", async (req,res)=>{
+router.get("/user-approve/:token", async (req,res)=>{
 
   const user = await User.findOne({
 

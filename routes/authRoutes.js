@@ -4,89 +4,132 @@ const User = require("../models/User");
 const nodemailer = require("nodemailer");
 
 // ===============================
-// LOGIN (Sheet Based)
+// LOGIN (Sheet Based - Now with OTP)
 // ===============================
 router.post("/login", async (req, res) => {
   try {
-    const { internshipId, name } = req.body;
+    const { internId, email, dob } = req.body;
 
-    if (!internshipId || !name) {
-      return res.status(400).json({ message: "All fields required" });
+    if (!internId || !email || !dob) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+
+    let formattedDob = dob.trim();
+    // Transform YYYY-MM-DD to DD-MM-YYYY if needed
+    if (formattedDob.includes("-") && formattedDob.split("-")[0].length === 4) {
+      const [year, month, day] = formattedDob.split("-");
+      formattedDob = `${day}-${month}-${year}`;
     }
 
     const user = await User.findOne({
-      internshipId: internshipId.trim(),
-      name: name.trim()
+      internshipId: { $regex: new RegExp(`^${internId.trim()}$`, "i") },
+      email: { $regex: new RegExp(`^${email.trim()}$`, "i") },
+      dateOfBirth: formattedDob
     });
 
     if (!user) {
-      return res.status(404).json({ message: "Invalid Internship ID or Name" });
+      return res.status(404).json({ success: false, message: "Invalid internship details." });
     }
 
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.otp = otp;
+    user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    await user.save();
+
+    // Send OTP to Admin
+    const { sendOTPToAdmin } = require("../utils/emailService");
+    await sendOTPToAdmin(otp);
+
     res.status(200).json({
-      message: "Login successful",
-      userId: user._id,
-      name: user.name
+      success: true,
+      message: "OTP sent to admin. Please enter it to continue.",
+      requiresOtp: true
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ===============================
+// VERIFY OTP
+// ===============================
+router.post("/verify-otp", async (req, res) => {
+  try {
+    const { internId, otp } = req.body;
+
+    const user = await User.findOne({
+      internshipId: { $regex: new RegExp(`^${internId.trim()}$`, "i") },
+      otp: otp.trim(),
+      otpExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    // Mark as approved (if needed for certificate access)
+    user.isApproved = true;
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      user: {
+        id: user._id,
+        name: user.name,
+        internshipId: user.internshipId,
+        tasks: user.tasks || 0,
+        hours: user.hours || 0,
+        certificateApproved: user.certificateApproved || false,
+        certificateRequested: user.certificateRequested || false,
+        position: user.position || "Intern",
+        duration: user.duration || "One Month",
+        startDate: user.startDate || "",
+        endDate: user.endDate || "",
+        issueDate: user.issueDate || "",
+        workDetails: user.workDetails || []
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
 
 // ===============================
-// REQUEST CERTIFICATE
+// REQUEST CERTIFICATE (Direct Link)
 // ===============================
 router.post("/request-certificate/:id", async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ success: false, message: "User not found" });
     }
-
-    if (user.certificateRequested) {
-      return res.status(400).json({ message: "Certificate already requested" });
-    }
-
-    user.certificateRequested = true;
-    await user.save();
 
     // Admin approval link
     const approveLink = `http://localhost:5000/api/admin/approve/${user._id}`;
 
-    // Email Transporter
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.ADMIN_EMAIL,
-        pass: process.env.ADMIN_PASS
-      }
+    // Send final Request Email to Admin
+    const { sendCertificateRequestToAdmin } = require("../utils/emailService");
+    await sendCertificateRequestToAdmin(user, approveLink);
+
+    // Mark as requested
+    user.certificateRequested = true;
+    await user.save();
+
+    res.status(200).json({ 
+      success: true,
+      message: "Approval link sent to Admin successfully!" 
     });
-
-    // Send Email to Admin
-    await transporter.sendMail({
-      from: process.env.ADMIN_EMAIL,
-      to: process.env.ADMIN_EMAIL,
-      subject: "Certificate Approval Request",
-      html: `
-        <h3>New Certificate Request</h3>
-        <p><strong>Name:</strong> ${user.name}</p>
-        <p><strong>Internship ID:</strong> ${user.internshipId}</p>
-
-        <a href="${approveLink}">
-          <button style="padding:10px 20px;background:green;color:white;border:none;border-radius:5px;">
-            Approve Certificate
-          </button>
-        </a>
-      `
-    });
-
-    res.status(200).json({ message: "Request sent to Admin successfully" });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
