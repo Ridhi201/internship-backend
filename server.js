@@ -22,7 +22,7 @@ mongoose.connect(process.env.MONGO_URI)
 .catch(err=>{
     console.error("❌ MongoDB Connection Error:");
     console.error(err);
-    console.log("Tip: Ensure local MongoDB is running at " + process.env.MONGO_URI);
+    console.log("Tip: Ensure your MONGO_URI in Render dashboard does NOT have < > brackets around the password.");
 });
 
 app.use("/api",userRoutes);
@@ -45,7 +45,7 @@ app.listen(process.env.PORT,()=>{
 // Schedule ERPCA Automation every hour
 cron.schedule("0 * * * *", () => {
   console.log("Running scheduled ERPCA automation...");
-  const scriptPath = path.join(__dirname, "../automation/erpca_automation.py");
+  const scriptPath = path.join(__dirname, "automation", "erpca_automation.py");
   
   exec(`python "${scriptPath}"`, async (error, stdout, stderr) => {
     if (error) {
