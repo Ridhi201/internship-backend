@@ -49,7 +49,9 @@ cron.schedule("0 * * * *", () => {
   
   exec(`python "${scriptPath}"`, async (error, stdout, stderr) => {
     if (error) {
-      return console.error(`Cron Job Error: ${error.message}`);
+      console.error("Cron Job Error:", error.message);
+      if (stderr) console.error("Error Details:", stderr);
+      return;
     }
     console.log("Automation Script executed via cron.");
     try {
