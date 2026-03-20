@@ -113,7 +113,7 @@ router.post("/request-certificate/:id", async (req, res) => {
     }
 
     // Admin approval link
-    const approveLink = `http://localhost:5000/api/admin/approve/${user._id}`;
+    const approveLink = `${process.env.BASE_URL}/api/admin/approve/${user._id}`;
 
     // Send final Request Email to Admin
     const { sendCertificateRequestToAdmin } = require("../utils/emailService");
