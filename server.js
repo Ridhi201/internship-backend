@@ -20,9 +20,11 @@ app.use(express.json());
 mongoose.connect(process.env.MONGO_URI)
 .then(()=>console.log("✅ MongoDB Connected Successfully"))
 .catch(err=>{
+    const maskedUri = process.env.MONGO_URI ? process.env.MONGO_URI.replace(/:([^@]+)@/, ':****@') : "UNDEFINED";
     console.error("❌ MongoDB Connection Error:");
+    console.error("Attempted Connection URI:", maskedUri);
     console.error(err);
-    console.log("Tip: Ensure your MONGO_URI in Render dashboard does NOT have < > brackets around the password.");
+    console.log("Tip: Check your Render dashboard Environment Variables. Ensure MONGO_URI is set correctly without < > brackets.");
 });
 
 app.use("/api",userRoutes);
